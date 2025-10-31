@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebSell AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'brand-primary': '#007BFF',
+              'brand-secondary': '#6C757D',
+              'brand-background': '#1a202c',
+              'brand-surface': '#2d3748',
+              'brand-text-primary': '#edf2f7',
+              'brand-text-secondary': '#a0aec0',
+            },
+            animation: {
+              'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'fade-in': 'fadeIn 0.5s ease-in-out',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://aistudiocdn.com/react@^19.2.0",
+          "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+          "react/": "https://aistudiocdn.com/react@^19.2.0/",
+          "@google/genai": "https://aistudiocdn.com/@google/genai@^1.28.0"
+        }
+      }
+    </script>
+  </head>
+  <body class="bg-brand-background">
+    <div id="root"></div>
+    <script type="text/babel" data-type="module">
+      import React, { useState, useRef, useEffect, useCallback } from 'react';
+      import ReactDOM from 'react-dom/client';
+      import { GoogleGenAI } from "@google/genai";
+
+      // --- From types.ts ---
+      const Sender = {
+        User: 'USER',
+        Bot: 'BOT',
+      };
+
+      // --- From components/icons.tsx ---
+      const SendIcon = ({ className }) => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          className={className}
+        >
+          <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
+        </svg>
+      );
+
+      const BotIcon = ({ className }) => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          className={className}
+        >
+          <path
+            fillRule="evenodd"
+            d="M4.5 3.75a3 3 0 00-3 3v10.5a3 3 0 003 3h15a3 3 0 003-3V6.75a3 3 0 00-3-3h-15zm4.125 3.375a.75.75 0 000 1.5h6.75a.75.75 0 000-1.5h-6.75zm0 3.75a.75.75 0 000 1.5h6.75a.75.75 0 000-1.5h-6.75zm0 3.75a.75.75 0 000 1.5h6.75a.75.75 0 000-1.5h-6.75z"
+            clipRule="evenodd"
+          />
+        </svg>
+      );
+
+      const UserIcon = ({ className }) => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          className={className}
+        >
+          <path
+            fillRule="evenodd"
+            d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z"
+            clipRule="evenodd"
+          />
+        </svg>
+      );
+
+      const SparklesIcon = ({ className }) => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={1.5}
+          stroke="currentColor"
+          className={className}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.562L16.25 21.75l-.648-1.188a2.25 2.25 0 01-1.423-1.423L13.5 18.75l1.188-.648a2.25 2.25 0 011.423-1.423L17.25 15l.648 1.188a2.25 2.25 0 011.423 1.423L20.5 18.75l-1.188.648a2.25 2.25 0 01-1.423 1.423z"
+          />
+        </svg>
+      );
+      
+      // --- From services/geminiService.ts ---
+      if (!process.env.API_KEY) {
+        console.error("API_KEY environment variable not set");
+      }
+
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+      const chatModel = 'gemini-2.5-flash';
+      const imageModel = 'imagen-4.0-generate-001';
+
+      const createChatSession = () => {
+        return ai.chats.create({
+          model: chatModel,
+          config: {
+            systemInstruction: 'You are WebSell AI, a powerful and helpful assistant. Be creative, friendly, and informative. If asked to generate an image, politely decline and suggest the user switch to the "Image AI" mode.',
+          }
+        });
+      };
+
+      const generateImage = async (prompt) => {
+        try {
+          const response = await ai.models.generateImages({
+            model: imageModel,
+            prompt: prompt,
+            config: {
+              numberOfImages: 2,
+              outputMimeType: 'image/jpeg',
+              aspectRatio: '1:1',
+            },
+          });
+
+          return response.generatedImages.map(
+            (img) => `data:image/jpeg;base64,${img.image.imageBytes}`
+          );
+        } catch (error) {
+          console.error("Error generating image:", error);
+          throw new Error("Failed to generate image. Please try again.");
+        }
+      };
+
+      // --- From components/ModeSelector.tsx ---
+      const ModeSelector = ({ mode, setMode }) => {
+        const baseClasses = "flex-1 px-4 py-3 text-sm font-semibold rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-brand-background";
+        const activeClasses = "bg-brand-primary text-white shadow-lg";
+        const inactiveClasses = "bg-brand-surface text-brand-text-secondary hover:bg-gray-600";
+
+        return (
+          <div className="flex w-full max-w-md mx-auto p-1.5 bg-brand-background rounded-xl border border-gray-700">
+            <button
+              onClick={() => setMode('chat')}
+              className={`${baseClasses} ${mode === 'chat' ? activeClasses : inactiveClasses}`}
+            >
+              Chat AI
+            </button>
+            <button
+              onClick={() => setMode('image')}
+              className={`${baseClasses} ${mode === 'image' ? activeClasses : inactiveClasses} ml-2`}
+            >
+              Image AI
+            </button>
+          </div>
+        );
+      };
+      
+      // --- From components/ChatInterface.tsx ---
+      const ChatMessage = React.memo(({ message }) => {
+        const isUser = message.sender === Sender.User;
+
+        return (
+          <div className={`flex items-start gap-3 my-4 animate-fade-in ${isUser ? 'justify-end' : ''}`}>
+            {!isUser && (
+              <div className="w-8 h-8 rounded-full bg-brand-primary flex-shrink-0 flex items-center justify-center">
+                <SparklesIcon className="w-5 h-5 text-white" />
+              </div>
+            )}
+            <div
+              className={`max-w-md lg:max-w-2xl px-4 py-3 rounded-2xl ${
+                isUser
+                  ? 'bg-brand-primary text-white rounded-br-none'
+                  : 'bg-brand-surface text-brand-text-primary rounded-bl-none'
+              }`}
+            >
+              <p className="whitespace-pre-wrap">{message.text}</p>
+            </div>
+             {isUser && (
+              <div className="w-8 h-8 rounded-full bg-brand-secondary flex-shrink-0 flex items-center justify-center">
+                <UserIcon className="w-5 h-5 text-white" />
+              </div>
+            )}
+          </div>
+        );
+      });
+
+      const ChatInterface = ({ messages, onSendMessage, isLoading }) => {
+        const [input, setInput] = useState('');
+        const messagesEndRef = useRef(null);
+        const textareaRef = useRef(null);
+
+        const scrollToBottom = () => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        };
+
+        useEffect(() => {
+          scrollToBottom();
+        }, [messages, isLoading]);
+
+        useEffect(() => {
+          if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+          }
+        }, [input]);
+
+        const handleSend = useCallback(() => {
+          if (input.trim() && !isLoading) {
+            onSendMessage(input.trim());
+            setInput('');
+          }
+        }, [input, isLoading, onSendMessage]);
+
+        const handleKeyDown = (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+          }
+        };
+
+        return (
+          <div className="flex flex-col h-full w-full max-w-4xl mx-auto">
+            <div className="flex-1 overflow-y-auto px-4 pb-20">
+              {messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-brand-text-secondary">
+                   <SparklesIcon className="w-16 h-16 mb-4"/>
+                   <h2 className="text-2xl font-bold text-brand-text-primary">Welcome to WebSell AI</h2>
+                   <p>Start a conversation by typing below.</p>
+                </div>
+              ) : (
+                messages.map((msg) => <ChatMessage key={msg.id} message={msg} />)
+              )}
+              {isLoading && (
+                <div className="flex items-start gap-3 my-4">
+                  <div className="w-8 h-8 rounded-full bg-brand-primary flex-shrink-0 flex items-center justify-center">
+                    <SparklesIcon className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="max-w-md px-4 py-3 rounded-2xl bg-brand-surface text-brand-text-primary rounded-bl-none">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 bg-brand-text-secondary rounded-full animate-pulse-fast"></span>
+                      <span className="w-2 h-2 bg-brand-text-secondary rounded-full animate-pulse-fast animation-delay-300"></span>
+                      <span className="w-2 h-2 bg-brand-text-secondary rounded-full animate-pulse-fast animation-delay-600"></span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 bg-brand-background bg-opacity-80 backdrop-blur-sm">
+              <div className="max-w-4xl mx-auto p-4">
+                  <div className="flex items-end bg-brand-surface rounded-xl p-2 border border-gray-600 focus-within:ring-2 focus-within:ring-brand-primary transition-all duration-300">
+                      <textarea
+                          ref={textareaRef}
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder="Ask me anything..."
+                          className="flex-1 bg-transparent p-2 text-brand-text-primary resize-none focus:outline-none max-h-40"
+                          rows={1}
+                          disabled={isLoading}
+                      />
+                      <button
+                          onClick={handleSend}
+                          disabled={isLoading || !input.trim()}
+                          className="p-2 rounded-lg text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed enabled:bg-brand-primary enabled:hover:bg-blue-600"
+                      >
+                          <SendIcon className="w-6 h-6" />
+                      </button>
+                  </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+      
+      // --- From components/ImageGenerator.tsx ---
+      const GeneratedImage = ({ src }) => (
+          <div className="aspect-square bg-brand-surface rounded-lg overflow-hidden animate-fade-in shadow-lg">
+              <img src={src} alt="Generated art" className="w-full h-full object-cover"/>
+          </div>
+      );
+
+      const LoadingSkeleton = () => (
+          <div className="aspect-square bg-brand-surface rounded-lg animate-pulse"></div>
+      );
+
+      const ImageGenerator = ({ onGenerateImage }) => {
+        const [prompt, setPrompt] = useState('');
+        const [images, setImages] = useState([]);
+        const [isLoading, setIsLoading] = useState(false);
+        const [error, setError] = useState(null);
+
+        const handleGenerate = useCallback(async () => {
+          if (!prompt.trim() || isLoading) return;
+          setIsLoading(true);
+          setError(null);
+          setImages([]);
+          try {
+            const generatedImages = await onGenerateImage(prompt.trim());
+            setImages(generatedImages);
+          } catch (err) {
+            setError(err.message || 'An unexpected error occurred.');
+          } finally {
+            setIsLoading(false);
+          }
+        }, [prompt, isLoading, onGenerateImage]);
+
+        const handleKeyDown = (e) => {
+          if (e.key === 'Enter') {
+            handleGenerate();
+          }
+        };
+
+        return (
+          <div className="flex flex-col h-full w-full max-w-4xl mx-auto p-4">
+            <div className="w-full">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="e.g., A futuristic cityscape at sunset, neon lights"
+                  className="w-full p-4 pr-32 bg-brand-surface border border-gray-600 text-brand-text-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary transition-all duration-300"
+                  disabled={isLoading}
+                />
+                <button
+                  onClick={handleGenerate}
+                  disabled={isLoading || !prompt.trim()}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2 px-4 py-2 bg-brand-primary text-white font-semibold rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-600"
+                >
+                  <SparklesIcon className="w-5 h-5" />
+                  Generate
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto mt-6">
+              {error && <div className="text-center text-red-400 p-4 bg-red-900/50 rounded-lg">{error}</div>}
+              
+              {isLoading && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <LoadingSkeleton />
+                      <LoadingSkeleton />
+                  </div>
+              )}
+
+              {!isLoading && images.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {images.map((src, index) => <GeneratedImage key={index} src={src} />)}
+                  </div>
+              )}
+
+              {!isLoading && images.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full text-brand-text-secondary text-center">
+                       <SparklesIcon className="w-16 h-16 mb-4"/>
+                       <h2 className="text-2xl font-bold text-brand-text-primary">Create with Image AI</h2>
+                       <p className="max-w-sm">Describe what you want to see and our AI will bring it to life.</p>
+                  </div>
+              )}
+            </div>
+          </div>
+        );
+      };
+      
+      // --- From App.tsx ---
+      const App = () => {
+        const [mode, setMode] = useState('chat');
+        const [messages, setMessages] = useState([]);
+        const [isLoading, setIsLoading] = useState(false);
+        const chatSessionRef = useRef(null);
+
+        useEffect(() => {
+          chatSessionRef.current = createChatSession();
+        }, []);
+
+        const handleSendMessage = async (text) => {
+          if (!chatSessionRef.current) return;
+          setIsLoading(true);
+          const userMessage = { id: Date.now().toString(), sender: Sender.User, text };
+          setMessages((prev) => [...prev, userMessage]);
+
+          try {
+            const result = await chatSessionRef.current.sendMessage({ message: text });
+            const botMessage = {
+              id: (Date.now() + 1).toString(),
+              sender: Sender.Bot,
+              text: result.text.trim(),
+            };
+            setMessages((prev) => [...prev, botMessage]);
+          } catch (error) {
+            console.error("Error sending message:", error);
+            const errorMessage = {
+              id: (Date.now() + 1).toString(),
+              sender: Sender.Bot,
+              text: "Sorry, something went wrong. Please try again.",
+            };
+            setMessages((prev) => [...prev, errorMessage]);
+          } finally {
+            setIsLoading(false);
+          }
+        };
+
+        const handleGenerateImage = async (prompt) => {
+            return generateImage(prompt);
+        };
+
+        return (
+          <main className="h-screen w-screen flex flex-col bg-brand-background text-brand-text-primary font-sans">
+            <header className="w-full p-4 border-b border-gray-700 shadow-md bg-brand-surface/50 backdrop-blur-sm">
+              <div className="max-w-4xl mx-auto flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <SparklesIcon className="w-8 h-8 text-brand-primary" />
+                  <h1 className="text-xl font-bold">WebSell AI</h1>
+                </div>
+                <ModeSelector mode={mode} setMode={setMode} />
+              </div>
+            </header>
+            <div className="flex-1 overflow-hidden relative">
+              {mode === 'chat' ? (
+                <ChatInterface
+                  messages={messages}
+                  onSendMessage={handleSendMessage}
+                  isLoading={isLoading}
+                />
+              ) : (
+                <ImageGenerator onGenerateImage={handleGenerateImage} />
+              )}
+            </div>
+          </main>
+        );
+      };
+      
+      // --- From index.tsx ---
+      const rootElement = document.getElementById('root');
+      if (!rootElement) {
+        throw new Error("Could not find root element to mount to");
+      }
+
+      const root = ReactDOM.createRoot(rootElement);
+      root.render(
+        <React.StrictMode>
+          <App />
+        </React.StrictMode>
+      );
+    </script>
+  </body>
+</html>
